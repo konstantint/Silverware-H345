@@ -169,8 +169,8 @@
 // select only one
 //#define RX_CG023_PROTOCOL
 //#define RX_H7_PROTOCOL
-//#define RX_BAYANG_PROTOCOL
-#define RX_BAYANG_PROTOCOL_TELEMETRY
+#define RX_BAYANG_PROTOCOL
+//#define RX_BAYANG_PROTOCOL_TELEMETRY
 //#define RX_BAYANG_PROTOCOL_BLE_BEACON
 //#define RX_BAYANG_BLE_APP
 //#define RX_CX10BLUE_PROTOCOL
@@ -201,7 +201,7 @@
 // flash save method
 // flash_save 1: pids + accel calibration
 // flash_save 2: accel calibration to option bytes
-#define FLASH_SAVE1
+//#define FLASH_SAVE1
 //#define FLASH_SAVE2
 
 

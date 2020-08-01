@@ -9,150 +9,56 @@
 
 void spi_init(void)
 {    
-	// spi port inits
+		SYS->P0_MFP |= SYS_MFP_P01_GPIO; // SPI CS
+		SYS->P0_MFP |= SYS_MFP_P07_SPI0_CLK|SYS_MFP_P05_SPI0_MOSI|SYS_MFP_P06_SPI0_MISO;
+		SYS->P5_MFP |= SYS_MFP_P52_GPIO;
 
-		GPIO_InitTypeDef  GPIO_InitStructure;
-	
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+		GPIO_SetMode(P0, BIT1, GPIO_MODE_OUTPUT);// SPI CS
+		GPIO_SetMode(P5, BIT2, GPIO_MODE_INPUT); // SPI IRQ
 
-	GPIO_InitStructure.GPIO_Pin = SPI_MOSI_PIN;
-	GPIO_Init(SPI_MOSI_PORT, &GPIO_InitStructure);
-	
-	GPIO_InitStructure.GPIO_Pin = SPI_CLK_PIN;
-	GPIO_Init(SPI_CLK_PORT, &GPIO_InitStructure);
-	
-	GPIO_InitStructure.GPIO_Pin = SPI_SS_PIN;
-	GPIO_Init(SPI_SS_PORT, &GPIO_InitStructure);
-	
-	//miso should be input by default
-	
-	spi_csoff();
+		CLK_EnableModuleClock(SPI0_MODULE);
+		CLK_SetModuleClock(SPI0_MODULE,CLK_CLKSEL1_SPISEL_HCLK,1);
 
+		SPI_Open(SPI0, SPI_MASTER, SPI_MODE_0, 8, 2000000);
+		SPI_DisableAutoSS(SPI0);
+		SPI_WRITE_TX(SPI0, 0);
 }
 
 
-#define gpioset( port , pin) port->BSRR = pin
-#define gpioreset( port , pin) port->BRR = pin
-
-#define MOSIHIGH gpioset( SPI_MOSI_PORT, SPI_MOSI_PIN)
-#define MOSILOW gpioreset( SPI_MOSI_PORT, SPI_MOSI_PIN);
-#define SCKHIGH gpioset( SPI_CLK_PORT, SPI_CLK_PIN);
-#define SCKLOW gpioreset( SPI_CLK_PORT, SPI_CLK_PIN);
-
-//#define READMISO (GPIO_ReadInputDataBit(SPI_MISO_PORT, SPI_MISO_PIN) )
-#define READMISO (SPI_MISO_PORT->IDR & SPI_MISO_PIN)
-
-#pragma push
-
-#pragma Otime
-#pragma O2
-
 void spi_cson( )
 {
-	SPI_SS_PORT->BRR = SPI_SS_PIN;
+		P01 = 0;
 }
 
 void spi_csoff( )
 {
-	SPI_SS_PORT->BSRR = SPI_SS_PIN;
+		P01 = 1;
 }
 
 
 void spi_sendbyte ( int data)
 {
-for ( int i =7 ; i >=0 ; i--)
-	{
-		if (  (data>>i)&1  ) 
-		{
-			MOSIHIGH;
-		}
-		else 
-		{
-			MOSILOW;
-		}
-	
-		SCKHIGH;
-		SCKLOW;
-	}
-}
-
-
-int spi_sendrecvbyte2( int data)
-{ 
-	int recv = 0;
-	for ( int i =7 ; i >=0 ; i--)
-	{
-		if ( (data) & (1<<7)  ) 
-		{
-			MOSIHIGH;
-		}
-		else 
-		{
-			MOSILOW;
-		}
-		SCKHIGH;
-		data = data<<1;
-		if ( READMISO ) recv= recv|(1<<7);
-		recv = recv<<1;
-		SCKLOW;
-	}	
-	  recv = recv>>8;
-    return recv;
+	    SPI_WRITE_TX(SPI0, data);
+	    SPI_TRIGGER(SPI0);
+	    while(SPI_IS_BUSY(SPI0));
+	    return;
 }
 
 
  int spi_sendrecvbyte( int data)
-{ int recv = 0;
-
-	for ( int i = 7 ; i >=0 ; i--)
-	{
-		recv = recv<<1;
-		if ( (data) & (1<<7)  ) 
-		{
-			MOSIHIGH;
-		}
-		else 
-		{
-			MOSILOW;
-		}
-		
-		data = data<<1;
-		
-		SCKHIGH;
-		
-		if ( READMISO ) recv= recv|1;
-
-		SCKLOW;
-		
-	}	
-
-    return recv;
+{ 	   
+	    SPI_WRITE_TX(SPI0, data);
+	    SPI_TRIGGER(SPI0);
+	    while(SPI_IS_BUSY(SPI0));
+	    return SPI0->RX;
 }
 
 
  int spi_sendzerorecvbyte( )
-{ int recv = 0;
-	MOSILOW;
-
-	for ( int i = 7 ; i >=0 ; i--)
-	{
-		recv = recv<<1;
-		
-		SCKHIGH;
-		
-		if ( READMISO ) recv= recv|1;
-
-		SCKLOW;
-		
-	}	
-    return recv;
+{
+	return spi_sendrecvbyte(0);
 }
 
-
-#pragma pop
 
 #endif
 

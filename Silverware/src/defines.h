@@ -2,10 +2,10 @@
 // defines for things that do not normally need changing
 
 
-#define MOTOR_BL 0
-#define MOTOR_FL 1
-#define MOTOR_FR 3
-#define MOTOR_BR 2
+#define MOTOR_BL 2
+#define MOTOR_FL 3
+#define MOTOR_FR 1
+#define MOTOR_BR 0
 
 #define PIDNUMBER 3
 

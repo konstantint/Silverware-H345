@@ -255,8 +255,8 @@ gyronew[2] = gyronew[2] - gyrocal[2];
 		}
 #endif	
 
-//gyronew[0] = - gyronew[0];
-gyronew[1] = - gyronew[1];
+gyronew[0] = - gyronew[0];
+//gyronew[1] = - gyronew[1];
 gyronew[2] = - gyronew[2];
 
 	for (int i = 0; i < 3; i++)
@@ -344,8 +344,8 @@ gyronew[2] = gyronew[2] - gyrocal[2];
 
 
 		
-//gyronew[0] = - gyronew[0];
-gyronew[1] = - gyronew[1];
+gyronew[0] = - gyronew[0];
+//gyronew[1] = - gyronew[1];
 gyronew[2] = - gyronew[2];
 	
 	

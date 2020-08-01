@@ -31,67 +31,12 @@ THE SOFTWARE.
 
 void ledon( uint8_t val )
 {
-#if ( LED_NUMBER > 0 )
-	#ifdef LED1_INVERT
-	if ( val&1) GPIO_ResetBits( LED1PORT, LED1PIN);
-	#else
-	if ( val&1)	GPIO_SetBits( LED1PORT, LED1PIN);
-	#endif
-#endif
-#if ( LED_NUMBER > 1 )
-	#ifdef LED2_INVERT
-  if ( val&2) GPIO_ResetBits( LED2PORT, LED2PIN);
-	#else
-	if ( val&2)	GPIO_SetBits( LED2PORT, LED2PIN);
-	#endif
-#endif
-#if ( LED_NUMBER > 2 )
-	#ifdef LED3_INVERT
-	if ( val&4) GPIO_ResetBits( LED3PORT, LED3PIN);
-	#else
-	if ( val&4)	GPIO_SetBits( LED3PORT, LED3PIN);
-	#endif
-#endif
-#if ( LED_NUMBER > 3 )
-	#ifdef LED4_INVERT
-	if ( val&8) GPIO_ResetBits( LED4PORT, LED4PIN);
-	#else
-	if ( val&8)	GPIO_SetBits( LED4PORT, LED4PIN);
-	#endif
-#endif
-			
+	GPIO_PIN_ADDR(LED1PORT, LED1PIN) = 1;
 }
 
 void ledoff( uint8_t val )
 {
-#if ( LED_NUMBER > 0 )	
-	#ifdef LED1_INVERT
-	if ( val&1)	GPIO_SetBits( LED1PORT, LED1PIN);
-	#else
-	if ( val&1) GPIO_ResetBits( LED1PORT, LED1PIN);
-	#endif
-#endif
-#if ( LED_NUMBER > 1 )
-	#ifdef LED2_INVERT
-	if ( val&2)	GPIO_SetBits( LED2PORT, LED2PIN);
-	#else
-	if ( val&2) GPIO_ResetBits( LED2PORT, LED2PIN);
-	#endif
-#endif
-#if ( LED_NUMBER > 2 )
-	#ifdef LED3_INVERT
-	if ( val&4)	GPIO_SetBits( LED3PORT, LED3PIN);
-	#else
-	if ( val&4) GPIO_ResetBits( LED3PORT, LED3PIN);
-	#endif
-#endif
-#if ( LED_NUMBER > 3 )
-	#ifdef LED1_INVERT
-	if ( val&8)	GPIO_SetBits( LED4PORT, LED4PIN);
-	#else
-	if ( val&8) GPIO_ResetBits( LED4PORT, LED4PIN);	
-	#endif
-#endif
+	GPIO_PIN_ADDR(LED1PORT, LED1PIN) = 0;
 }
 
 void ledflash( uint32_t period , int duty )

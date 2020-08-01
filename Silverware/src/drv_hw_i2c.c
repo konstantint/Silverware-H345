@@ -23,7 +23,7 @@ THE SOFTWARE.
 */
 
 
-
+#include <stdbool.h>
 #include "project.h"
 #include "drv_hw_i2c.h"
 #include "drv_time.h"
@@ -109,184 +109,85 @@ extern int liberror;
 
 void hw_i2c_init( void)
 {
+	    CLK_EnableModuleClock(I2C0_MODULE);
 
-GPIO_InitTypeDef gpioinitI2C1;
+	    SYS->P3_MFP &= ~SYS_MFP_P34_Msk;
+	    SYS->P3_MFP |= SYS_MFP_P34_I2C0_SDA;
+	    SYS->P3_MFP &= ~SYS_MFP_P35_Msk;
+	    SYS->P3_MFP |= SYS_MFP_P35_I2C0_SCL;
 
-gpioinitI2C1.GPIO_Mode = GPIO_Mode_AF;
-gpioinitI2C1.GPIO_OType = GPIO_OType_OD;
-gpioinitI2C1.GPIO_PuPd = GPIO_PuPd_UP;
-
-
-#ifdef HW_I2C_PINS_PB67
-gpioinitI2C1.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7;
-GPIO_Init(GPIOB, &gpioinitI2C1);
-#endif
-	
-#ifdef HW_I2C_PINS_PA910
-gpioinitI2C1.GPIO_Pin = GPIO_Pin_9 | GPIO_Pin_10;
-GPIO_Init(GPIOA, &gpioinitI2C1);
-#endif
-	
-
-
-#ifdef HW_I2C_PINS_PB67
-GPIO_PinAFConfig(GPIOB, GPIO_PinSource6, GPIO_AF_1);
-GPIO_PinAFConfig(GPIOB, GPIO_PinSource7, GPIO_AF_1);
-#endif
-
-#ifdef HW_I2C_PINS_PA910
-GPIO_PinAFConfig(GPIOA, GPIO_PinSource9, GPIO_AF_4);
-GPIO_PinAFConfig(GPIOA, GPIO_PinSource10, GPIO_AF_4);
-#endif
-
-
-RCC_APB1PeriphClockCmd( RCC_APB1Periph_I2C1, ENABLE);
-
-#ifdef HW_I2C_PINS_PB67
-RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);
-SYSCFG_I2CFastModePlusConfig(SYSCFG_I2CFastModePlus_PB6 , ENABLE);
-SYSCFG_I2CFastModePlusConfig(SYSCFG_I2CFastModePlus_PB7 , ENABLE);
-#endif
-
-#ifdef HW_I2C_PINS_PA910
-RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);
-SYSCFG_I2CFastModePlusConfig(SYSCFG_I2CFastModePlus_PA9 , ENABLE);
-SYSCFG_I2CFastModePlusConfig(SYSCFG_I2CFastModePlus_PA10 , ENABLE);
-#endif
-
-RCC_I2CCLKConfig(RCC_I2C1CLK_SYSCLK);
-
-I2C_InitTypeDef initI2C1;
-
-// I2C_StructInit(&initI2C1);
-
-initI2C1.I2C_Timing = HW_I2C_TIMINGREG;
-initI2C1.I2C_AnalogFilter = I2C_AnalogFilter_Enable;
-initI2C1.I2C_DigitalFilter = HW_I2C_DIGITAL_FILTER ;
-initI2C1.I2C_Mode = I2C_Mode_I2C;
-initI2C1.I2C_OwnAddress1 = 0xAB;
-initI2C1.I2C_Ack = I2C_Ack_Enable;
-initI2C1.I2C_AcknowledgedAddress = I2C_AcknowledgedAddress_7bit;
-
-I2C_Init(I2C1, &initI2C1);
-I2C_Cmd(I2C1, ENABLE);  
-	
-}
-
-//#define I2C_TIMEOUT 50000
-//#define I2C_CONDITION i2c_timeout > I2C_TIMEOUT
-
-#define I2C_CONDITION ((i2c_timeout>>13))
-
-int hw_i2c_sendheader( int reg, int bytes)
-{
-
-unsigned int i2c_timeout = 0;
-//check i2c ready	
-while(I2C_GetFlagStatus(I2C1, I2C_FLAG_BUSY) == SET)
-	{
-		i2c_timeout++;
-		if(I2C_CONDITION)
-			{ 
-			liberror++;
-			return 0;
-			}
-	}
-		
-// start transfer	
-I2C_TransferHandling(I2C1, HW_I2C_ADDRESS<<1, bytes, I2C_SoftEnd_Mode, I2C_Generate_Start_Write);
-	
-//i2c_timeout = 0;
-// wait for address to be sent	
-while(I2C_GetFlagStatus(I2C1, I2C_FLAG_TXIS) == RESET)
-		{
-		i2c_timeout++;
-		if(I2C_CONDITION)
-			{ 
-			liberror++;
-			return 0;
-			}
-	}
-
-// send next byte (register location)	
-I2C_SendData(I2C1, (uint8_t)reg);
-	
-//i2c_timeout = 0;
-// wait until last data sent
-while(I2C_GetFlagStatus(I2C1, I2C_FLAG_TXE) == RESET)
-	{
-	i2c_timeout++;
-		if(I2C_CONDITION)
-		{ 
-		liberror++;
-		return 0;
-		}
-	}
-	
-return 1;
+	    I2C_Open(I2C0, 400000);
 }
 
 
+// Helpers
+bool i2c_start(uint8_t slave_id, bool prepare_to_receive) {
+	uint8_t recv_bit = (uint8_t)prepare_to_receive;
+
+	I2C_START(I2C0);
+	I2C_WAIT_READY(I2C0);
+	I2C_SET_DATA(I2C0, (uint8_t)(slave_id << 1) | recv_bit);
+	I2C_SET_CONTROL_REG(I2C0, I2C_SI);
+	I2C_WAIT_READY(I2C0);
+
+	uint8_t status = I2C_GET_STATUS(I2C0);
+	if (prepare_to_receive)
+		return status == 0x40; // SLA+R has been transmitted; ACK has been received.
+	else
+		return status == 0x18; // SLA+W has been transmitted; ACK has been received.
+}
+
+void i2c_stop() {
+		I2C_SET_CONTROL_REG(I2C0, I2C_STO | I2C_SI);
+}
+
+bool i2c_tx_byte(uint8_t data) {
+		I2C_SET_DATA(I2C0, data);
+		I2C_SET_CONTROL_REG(I2C0, I2C_SI);
+		I2C_WAIT_READY(I2C0);
+		return I2C_GET_STATUS(I2C) == 0x28; // Data byte in I2DAT has been transmitted; ACK has been received.
+}
 
 void hw_i2c_writereg( int reg ,int data)
 {
+		int status = i2c_start(SOFTI2C_GYRO_ADDRESS, 0);
+		if (!status) goto done; // Sorry, Edsger
 
-unsigned int i2c_timeout = 0;
+		status = i2c_tx_byte(reg);
+		if (!status) goto done;
 
-// send start + writeaddress + register location, common send+receive
-hw_i2c_sendheader( reg,2 );
-// send register value
-I2C_SendData(I2C1, (uint8_t) data);
-// wait for finish	
-while(I2C_GetFlagStatus(I2C1, I2C_FLAG_TC) == RESET)
-	{
-	i2c_timeout++;
-		if(I2C_CONDITION)
-		{ 
-		liberror++;
-		return;
-		}
-	}
-
-// send stop - end transaction
-I2C_GenerateSTOP(I2C1, ENABLE);
-
-	
-return;	
+		status = i2c_tx_byte(data);
+	done:
+		i2c_stop();
 }
 
 
 
 int hw_i2c_readdata( int reg, int *data, int size )
 {
+		int status = i2c_start(SOFTI2C_GYRO_ADDRESS, 0);
+		if (!status) goto done;
 
-static uint8_t i = 0;
-unsigned int i2c_timeout = 0;
+		status = i2c_tx_byte(reg);
+		if (!status) goto done;
+		i2c_stop();
 
-	// send start + writeaddress + register location, common send+receive
-hw_i2c_sendheader( reg, 1 );
+		status = i2c_start(SOFTI2C_GYRO_ADDRESS, 1);
+		if (!status) goto done;
 
-	//send restart + readaddress
-I2C_TransferHandling(I2C1, HW_I2C_ADDRESS<<1 , size, I2C_AutoEnd_Mode, I2C_Generate_Start_Read);
+	    uint8_t i;
+	    for (i = 0; i < size - 1; i++) {
+	        I2C_SET_CONTROL_REG(I2C, I2C_SI | I2C_AA);
+	        I2C_WAIT_READY(I2C);
+	        data[i] = I2C_GET_DATA(I2C);
+	    }
+	    I2C_SET_CONTROL_REG(I2C, I2C_SI);
+	    I2C_WAIT_READY(I2C);
+	    data[i] = I2C_GET_DATA(I2C);
 
-//wait for data
-for(i = 0; i<size; i++)
-	{
-	i2c_timeout = 0;	
-	while(I2C_GetFlagStatus(I2C1, I2C_FLAG_RXNE) == RESET)
-		{
-		i2c_timeout++;
-		if(I2C_CONDITION)
-				{
-				liberror++;
-				return 0;
-				}
-		}
-	data[i] = I2C_ReceiveData(I2C1);
-	}
-
-//data received	
-return 1;
+	done:
+		i2c_stop();
+		return status;	
 }
 
 

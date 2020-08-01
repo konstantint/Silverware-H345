@@ -122,26 +122,24 @@ void failloop( int val);
 
 int random_seed = 0;
 
+void printf_float(float v) {
+	char sign = v < 0 ? '-' : ' ';
+	v = v < 0 ? -v : v;
+	int int_part = (int)v;
+	float pow = 1000;
+	int frac_part = (int)((v - (float)int_part)*pow);
+	printf("%c%i.%03i", sign, int_part, frac_part);
+}
+
+
 int main(void)
 {
-	
-	delay(1000);
-
-
-#ifdef ENABLE_OVERCLOCK
-clk_init();
-#endif
-	
+	clk_init();
+	serial_init();
+	time_init();
   gpio_init();	
-	
 	spi_init();
-	
-  time_init();
-
-	delay(100000);
-		
-	i2c_init();	
-	
+	i2c_init();		
 	pwm_init();
 
 	pwm_set( MOTOR_BL , 0);
@@ -149,6 +147,8 @@ clk_init();
 	pwm_set( MOTOR_FR , 0); 
 	pwm_set( MOTOR_BR , 0); 
 
+	//ledon(0xff);
+	delay(100000);
 
 	sixaxis_init();
 	
@@ -240,11 +240,29 @@ if ( liberror )
 //
 //
 
-
+	uint32_t loopctr = 0;
 	while(1)
 	{
 		// gettime() needs to be called at least once per second 
 		unsigned long time = gettime(); 
+		/*loopctr++;
+		if (loopctr % 100 == 0) {
+			extern float pidoutput[PIDNUMBER];
+			extern float error[PIDNUMBER];
+			extern float gyro[3];
+			printf("G:");
+			printf_float(gyro[0]); printf(" ");
+			printf_float(gyro[1]); printf(" ");
+			printf_float(gyro[2]); printf("\nRx:");
+			
+			printf_float(rx[0]); printf(" ");
+			printf_float(rx[1]); printf(" ");
+			printf_float(rx[2]); printf("\nPID:");
+			
+			printf_float(pidoutput[0]); printf(" ");
+			printf_float(pidoutput[1]); printf(" ");
+			printf_float(pidoutput[2]); printf("\n");
+		}*/
 		looptime = ((uint32_t)( time - lastlooptime));
 		if ( looptime <= 0 ) looptime = 1;
 		looptime = looptime * 1e-6f;
@@ -502,10 +520,10 @@ void failloop( int val)
 }
 
 
-void HardFault_Handler(void)
+/*void HardFault_Handler(void)
 {
 	failloop(5);
-}
+}*/
 void MemManage_Handler(void) 
 {
 	failloop(5);

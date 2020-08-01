@@ -1,6 +1,6 @@
 // serial for stm32 not used yet
 #include "project.h"
-#include "stm32f0xx_usart.h"
+//#include "stm32f0xx_usart.h"
 #include <stdio.h>
 #include "drv_serial.h"
 #include "config.h"
@@ -105,7 +105,10 @@ void buffer_add(int val )
 // serial disabled - dummy functions
 void serial_init(void)
 {
-	
+		CLK_EnableModuleClock(UART1_MODULE);
+		SYS->P4_MFP = SYS_MFP_P46_UART1_RXD | SYS_MFP_P47_UART1_TXD;
+		UART_Open(UART1, 115200);
+		printf("Serial initialized\n");
 }
 
 void buffer_add(int val )

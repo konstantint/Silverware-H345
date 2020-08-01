@@ -30,17 +30,10 @@
 
 
 
+#define LED_NUMBER 1
 
-
-#define LED_NUMBER 2
-
-#define LED1PIN GPIO_Pin_2
-#define LED1PORT GPIOA
-
-#define LED2PIN GPIO_Pin_3
-#define LED2PORT GPIOA
-
-
+#define LED1PIN 6
+#define LED1PORT 2
 
 
 // invert - leds turn on when high
@@ -54,8 +47,8 @@
 // i2c driver to use ( dummy - disables i2c )
 // hardware i2c used PB6 and 7 by default ( can also use PA9 and 10)
 
-//#define USE_HARDWARE_I2C
-#define USE_SOFTWARE_I2C
+#define USE_HARDWARE_I2C
+//#define USE_SOFTWARE_I2C
 //#define USE_DUMMY_I2C
 
 // for boards without a SCL pullup - E011 ( nonstandard i2c )
@@ -113,7 +106,7 @@
 
 
 // disable lvc functions
-//#define DISABLE_LVC
+#define DISABLE_LVC
 
 // Analog battery input pin and adc channel
 
@@ -144,8 +137,8 @@
 #define SPI_SS_PORT GPIOA
 
 //spi type
-#define SOFTSPI_3WIRE
-//#define SOFTSPI_4WIRE
+//#define SOFTSPI_3WIRE
+#define SOFTSPI_4WIRE
 //#define SOFTSPI_NONE
 
 // check for radio chip ( 3 times flash = not found)
