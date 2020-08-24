@@ -31,7 +31,7 @@ public:
 		SPI_TRIGGER(SPI0);
 		while (SPI_IS_BUSY(SPI0))
 			;
-		return SPI0->RX;
+		return (uint8_t) SPI0->RX;
 	}
 
 	inline void cson() {

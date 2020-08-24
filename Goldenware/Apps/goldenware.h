@@ -11,30 +11,25 @@
 #include "serial_debug.h"
 #include "../Common/condition.h"
 #include "../Common/defines.h"
+#include "../Common/errors.h"
 #include "../Common/blink.h"
 #include "../Common/filter.h"
 #include "../Common/gyro.h"
 #include "../Common/loop.h"
 #include "../Common/motors.h"
 #include "../Common/printf.h"
+#include "../RX/xn297_ble_beacon.h"
 #include "../Sound/melodies.h"
 
-enum BlinkCodes : char {
-	E_LOW_BATTERY = 2,
-	E_NO_GYRO = 4,
-	E_CLOCK = 5,
-	E_LOOP_TIME = 6,
-	E_I2C = 7,
-	E_I2C_MAIN = 8
-};
+
+//TODO
 
 // The QuadcopterBoard type must provide the following fields:
 //  - clock
 //  - led
 //  - battery
-//  - mpu6050
-//  - read_gyro, read_rx and set_motors methods.
-
+//  - read_gyro, set_motors and self_test methods.
+// Controller must provide "calibrate", "sense", "decide" and "act"
 template<typename QuadcopterBoard, typename Controller>
 struct GoldenwareApp {
 	static constexpr int LOOP_TIME = 1000; // 1ms per loop
@@ -46,19 +41,20 @@ struct GoldenwareApp {
 	LPFValue<float, std::ratio<63, 64>> v_batt = 3.7; // Battery voltage
 
 	inline GoldenwareApp(QuadcopterBoard& board_) :
-			board(board_), controller(board) {
+			board(board_), controller(board_) {
 		// Welcome blink
 		blink(board);
 
 		// Self-test
-		if (!board.mpu6050.self_test())
-			failure(E_NO_GYRO);
+		ErrorCode self_test = board.self_test();
+		if (self_test != ErrorCode::E_SUCCESS)
+			failure(self_test);
 
 		// Read battery voltage and stop on low battery
 		for (int i = 0; i < 64; i++)
 			v_batt.update(board.battery.get_voltage());
 		if (v_batt < LOW_BATTERY_THRESHOLD)
-			failure(E_LOW_BATTERY);
+			failure(ErrorCode::E_LOW_BATTERY);
 
 		// Calibrate the Gyro
 		if (controller.calibrate())
@@ -77,10 +73,33 @@ struct GoldenwareApp {
 			controller.decide();
 			controller.act();
 
+			// BLE telemetry
+			board.ble.tx_manager.act(_loop.loop_started, [&]() {
+				static int adv_cnt = 0;
+				static int p_type = 1;
+
+				constexpr MacAddress mac_addr = {0x11, 0x22, 0x33, 0x44, 0x55, 0xF6};
+				BleAdvertisingPacket packet(mac_addr);
+
+				switch (p_type) {
+				case 0:
+					board.imu.read_temperature();
+					packet.eddystone_tlm(_loop.loop_started, QuadcopterBoard::name, v_batt, ++adv_cnt,
+										 board.imu.data().temp_c());
+					break;
+				case 1:
+					// -22 dBm TX power
+					packet.eddystone_url(-12, 0x02, "google.com/", 11);
+					break;
+				}
+				p_type = (p_type + 1) % 2;
+				board.ble.send(packet);
+			});
+
 			// Battery voltage & LED signaling
 			v_batt.update(board.battery.get_voltage());
 			led_signaling_tick(_loop.loop_started);
-			if (_loop.elapsed() > 10 * LOOP_TIME) failure(E_LOOP_TIME);
+			if (_loop.elapsed() > 10 * LOOP_TIME) failure(ErrorCode::E_LOOP_TIME);
 
 			// Extra features
 			serial_debug_app();
@@ -107,11 +126,10 @@ struct GoldenwareApp {
 			board.led.set(board.rx.data().aux[CH_FLIP]);
 	}
 
-	void failure(int status) {
-		for (int i = 0; i < 4; i++)
-			board.motors.set_power((QuadcopterMotorId) i, 0.0);
-		dprintf("Failure: %i\n", status);
-		blink_forever(board, status);
+	void failure(ErrorCode status) {
+		for (auto m : ALL_MOTORS) board.motors.set_power(m, 0.0);
+		dprintf("Failure: %i\n", (int)status);
+		blink_forever(board, (int)status);
 	}
 
 	// ----------- Extras --------------
@@ -145,8 +163,8 @@ struct GoldenwareApp {
 		};
 		not_moving.update(is_not_moving(), board.clock.micros());
 
-		if (not_moving.valid_for > 20000000) {
-			// Idling for 20 seconds? Play a tune!
+		if (not_moving.valid_for > 120000000) {
+			// Idling for 120 seconds? Play a tune!
 			board.led.set(true);
 			SoundMaker<decltype(board.motors)> sound(board.motors);
 			Melodies::song(sound, board.clock, next_track++);

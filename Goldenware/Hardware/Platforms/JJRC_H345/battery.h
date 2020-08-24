@@ -13,7 +13,7 @@
 
 template<typename Adc> class Battery {
 	Adc& _adc;
-	float _scale;
+	float _scale = 0.010853391f; // We actually initialize it in constructor.
 public:
 	inline explicit Battery(Adc& adc) :
 			_adc(adc) {

@@ -47,6 +47,9 @@ struct Mpu6050Data {
 
 	// Temperature in Celsius
 	inline float temp_c() {
+		// Actually every MPU6050 clone has its own calibration parameters,
+		// these are from the original MPU6050 datasheet
+		// TODO: Make the code chip-specific
 		return (float)temp / 340.0f + 36.53;
 	}
 #endif
@@ -147,7 +150,7 @@ public:
 		_i2c.write_register(_slave_id, R_PWR_MGMT_1, DEVICE_RESET_BIT);
 	}
 
-	// Read accelerometer, gyro and temperature values
+	// Read accelerometer, Gyro and temperature values
 	bool read_all() {
 		uint8_t buffer[14];
 		bool status = _i2c.read_data(_slave_id, R_ACCEL_DATA, buffer, 14);
@@ -156,12 +159,12 @@ public:
 		_data.acc.y() = (int16_t) ((buffer[2] << 8) | buffer[3]);
 		_data.acc.z() = (int16_t) ((buffer[4] << 8) | buffer[5]);
 
-		_data.gyro.x() = (buffer[8] << 8) | buffer[9];
-		_data.gyro.y() = (buffer[10] << 8) | buffer[11];
-		_data.gyro.z() = (buffer[12] << 8) | buffer[13];
+		_data.gyro.x() = (int16_t)((buffer[8] << 8) | buffer[9]);
+		_data.gyro.y() = (int16_t)((buffer[10] << 8) | buffer[11]);
+		_data.gyro.z() = (int16_t)((buffer[12] << 8) | buffer[13]);
 
 #ifdef MPU6050_USE_TEMPERATURE_SENSOR
-		_data.temp = (buffer[6] << 8) | buffer[7];
+		_data.temp = (int16_t)((buffer[6] << 8) | buffer[7]);
 #endif
 
 		return status;
@@ -169,10 +172,11 @@ public:
 
 #ifdef MPU6050_USE_TEMPERATURE_SENSOR
 	// Read temperature data
-	bool read_temp() {
+	bool read_temperature() {
 		uint8_t buffer[6];
-		_i2c.read_data(_slave_id, R_TEMP_DATA, buffer, 2);
+		bool status = _i2c.read_data(_slave_id, R_TEMP_DATA, buffer, 2);
 		_data.temp = (int16_t)((buffer[0] << 8) | buffer[1]);
+		return status;
 	}
 #endif
 
@@ -204,7 +208,7 @@ public:
 	// NB: There's actualy a real 'self-test' function built into MPU6050, but we don't use it here
 	inline bool self_test() {
 		constexpr static std::array<uint8_t, 4> known_gyros = {
-				0x68 /* MPU6050 datasheet */, 0x98, 0x7D /* H345 */, 0x72 };
+				0x68 /* MPU6050 datasheet */, 0x98, 0x7D /* H345's M540 */, 0x72 };
 
 		uint8_t who_am_i = _i2c.read_register(_slave_id, R_WHO_AM_I);
 		return std::find(known_gyros.begin(), known_gyros.end(), who_am_i)

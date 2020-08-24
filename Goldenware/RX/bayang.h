@@ -8,9 +8,10 @@
 #include "common.h"
 #include "../Hardware/Peripherals/xn297.h"
 
+
 constexpr int FAILSAFETIME = 1000000; // one second
 // Note that during binding the transmitter sends bind packets for longer than 1 second
-// Therefore we briefly failsafe on binding.
+// Therefore we may briefly failsafe on binding.
 
 template<typename Xn297, typename Clock> class BayangRX {
 	Xn297& _xn;
@@ -32,13 +33,15 @@ template<typename Xn297, typename Clock> class BayangRX {
 	static constexpr int HOPPING_NUMBER = 4;
 
 	int chan = 0;
-	char rfchannel[4];
+	uint8_t rfchannel[4];
 	char lastaux[NUM_AUX_CHANNELS];
 	char auxchange[NUM_AUX_CHANNELS];
-	char rxdata[15];
-	char rxaddress[5] = { 0, 0, 0, 0, 0 };
+	uint8_t rxdata[15];
+	uint8_t rxaddress[5] = { 0, 0, 0, 0, 0 };
 
 	bool _packet_available() {
+		//TODO:
+		//return !_xn.rx_fifo_empty();
 		int status = _xn.read_reg(R_STATUS);
 		return (status & 0b00001110) != 0b00001110; // RX FIFO not empty
 	}
@@ -50,7 +53,7 @@ template<typename Xn297, typename Clock> class BayangRX {
 		_xn.write_reg(RF_CH, rfchannel[chan]);
 	}
 
-	static float _decode_input(char* data) {
+	static float _decode_input(const uint8_t* data) {
 		float val = (float) (data[0] & 0b11) * 256.0f
 				+ (float) (uint8_t) data[1];
 		return (val - 512.0) * 0.001953125; // /512
@@ -100,16 +103,15 @@ public:
 		_xn.write_buf(RX_ADDR_P0, rxaddress, 5);
 		_xn.write_reg(EN_AA, 0);	// aa disabled
 		_xn.write_reg(EN_RXADDR, 1); // pipe 0 only
-		_xn.write_reg(RF_SETUP, 0x01); // lna high current on ( better performance )
 		_xn.write_reg(RX_PW_P0, 15); // payload size
-		_xn.write_reg(SETUP_RETR, 0); // no retransmissions ( redundant?)
+		_xn.write_reg(SETUP_RETR, 0); // no retransmissions (redundant?)
 		_xn.write_reg(SETUP_AW, 3); // address size (5 bits)
-		_xn.write_reg(0x1D, 0x20); // feature reg, CE mode (software controlled)
-		_xn.write_reg(0xFD, 0x00); // Send bytes 0xFD, 0x00: Internal CE high command (?)
+		_xn.set_data_rate_and_max_tx_power(0);
+		_xn.set_software_ce_and_64_byte_payload();
 
 		_xn.command(FLUSH_RX);
 		_xn.write_reg(RF_CH, 0);  // bind on channel 0
-		_xn.write_reg(0, 0b10001111); // power up, crc enabled
+		_xn.power_up(true, true, true, true); // Power up in RX mode, 2byte CRC
 	}
 
 	bool recv() {
@@ -186,6 +188,7 @@ public:
 					_data.rx[i] = 0;
 			}
 		}
+
 		return retval;
 	}
 

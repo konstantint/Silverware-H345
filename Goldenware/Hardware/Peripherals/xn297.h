@@ -1,10 +1,20 @@
 // Generic interface to the XN297 radio chip over an SPI bus.
 //
+// XN297L English datasheet: http://www.panchip.com/static/upload/file/20190916/1568621331607821.pdf
+//
+// "XN297L is compatible with the XN297, an early version of XN297L.
+//  With a fewer external passive components than the XN297, XN297L improves the RF
+//  specification margins for meeting RF regulatory standards."
+//
+// NB: X297 is a clone of nRF24L01+ with an extra command (ACTIVATE) and
+// three additional registers (DEMOD_CAL, RF_CAL, BB_CAL)
+//
 // License: MIT
 // Author: silverx, conversion to C++ by konstantint
 // Based on the work of silverx and other contributors to the Silverware project.
 
 #pragma once
+#include <cstdint>
 
 // registers
 #define CONFIG      0x00
@@ -14,7 +24,7 @@
 #define SETUP_RETR  0x04
 #define RF_CH       0x05
 #define RF_SETUP    0x06
-#define R_STATUS      0x07
+#define R_STATUS    0x07
 #define OBSERVE_TX  0x08
 #define CD          0x09
 #define RX_ADDR_P0  0x0A
@@ -31,8 +41,9 @@
 #define RX_PW_P4    0x15
 #define RX_PW_P5    0x16
 #define FIFO_STATUS 0x17
+#define R_FEATURE 	0x1d
 
-// bit masks
+// Bit positions
 #define MASK_RX_DR  6
 #define MASK_TX_DS  5
 #define MASK_MAX_RT 4
@@ -85,6 +96,7 @@
 #define ACTIVATE      0x50
 #define R_RX_PAYLOAD  0x61
 #define W_TX_PAYLOAD  0xA0
+#define CE_FSPI_ON	  0xFD
 #define FLUSH_TX      0xE1
 #define FLUSH_RX      0xE2
 #define REUSE_TX_PL   0xE3
@@ -95,21 +107,37 @@
 #define BITRATE_2M 		0x1
 #define BITRATE_250K 	0x2
 
-template<typename Spi> class Xn297 {
+
+// The different types of Xn297 chip have
+// different commands that are incompatible
+// (e.g. setting a data rate for Xn297 and Xn297L is different)
+// Seemingly Xn297-compatible nRF datasheet:
+//   https://www.sparkfun.com/datasheets/Components/nRF24L01_prelim_prod_spec_1_2.pdf
+// Xn297L datasheet:
+//   http://www.panchip.com/static/upload/file/20190916/1568621331607821.pdf
+enum class Xn297Type {
+	Xn297,
+	Xn297L
+};
+
+
+template<Xn297Type XnType, typename Spi> class Xn297 {
 	Spi& _spi;
 public:
+	constexpr static Xn297Type xn297_type = XnType;
+
 	inline explicit Xn297(Spi& spi) :
 			_spi(spi) {
 	}
 
-	void write_reg(char reg, char val) {
+	void write_reg(uint8_t reg, uint8_t val) {
 		_spi.cson();
 		_spi.sendrecv(reg | W_REGISTER);
 		_spi.sendrecv(val);
 		_spi.csoff();
 	}
 
-	char read_reg(char reg) {
+	char read_reg(uint8_t reg) {
 		_spi.cson();
 		_spi.sendrecv(reg);
 		char val = _spi.sendrecv(0x00);
@@ -117,7 +145,7 @@ public:
 		return val;
 	}
 
-	void write_buf(char reg, char data[], int size) {
+	void write_buf(uint8_t reg, const uint8_t *data, int size) {
 		_spi.cson();
 		_spi.sendrecv(reg | W_REGISTER);
 		for (int i = 0; i < size; i++)
@@ -125,7 +153,7 @@ public:
 		_spi.csoff();
 	}
 
-	void read_buf(char reg, char *data, int size) {
+	void read_buf(uint8_t reg, uint8_t *data, int size) {
 		_spi.cson();
 		_spi.sendrecv(reg);
 		for (int i = 0; i < size; i++)
@@ -133,10 +161,50 @@ public:
 		_spi.csoff();
 	}
 
-	int command(char cmd) {
+	int command(uint8_t cmd) {
 		_spi.cson();
 		int status = _spi.sendrecv(cmd);
 		_spi.csoff();
 		return status;
+	}
+
+	bool self_test() {
+		// We can self-test by reading the RX_ADDR_P5 register
+		// It must be equal to 0xC6 on reset
+		return read_reg(RX_ADDR_P5) == 0xC6;
+	}
+
+	// Sets the highest TX power and a given data rate
+	// Rate:
+	//   0 = 1Mbps
+	//   1 = 2Mbps
+	//   3 = 250Kbps (X297L only)
+	inline void set_data_rate_and_max_tx_power(char rate) {
+		if (XnType == Xn297Type::Xn297)
+			write_reg(RF_SETUP, (uint8_t)(0b100111 + (rate << 6)));
+		else
+			write_reg(RF_SETUP, (uint8_t)(0b111 + (rate << 3)));
+	}
+
+	// Sets the software CE pin for Xn297 and enables 64 byte payloads
+	inline void set_software_ce_and_64_byte_payload() {
+		if (XnType == Xn297Type::Xn297L) {
+			write_reg(R_FEATURE, 0b00111000); // 64 byte payload, software CE
+			write_reg(CE_FSPI_ON, 0x00); // Internal CE high command followed by 0x00
+		}
+	}
+
+	inline void power_up(bool rx, bool crc_2bytes,  bool crc_enabled, bool stb3) {
+		uint8_t value = rx | (0b10) | (crc_2bytes << 2) | (crc_enabled << 3);
+		if (XnType == Xn297Type::Xn297L) value |= (stb3 << 7);
+		write_reg(CONFIG, value);
+	}
+
+	inline bool tx_fifo_empty() {
+		return (read_reg(FIFO_STATUS) & (1 << TX_EMPTY));
+	}
+
+	inline bool rx_fifo_empty() {
+		return (read_reg(FIFO_STATUS) & (1 << RX_EMPTY));
 	}
 };

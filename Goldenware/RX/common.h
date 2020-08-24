@@ -47,6 +47,6 @@ struct RxData {
 	char aux[NUM_AUX_CHANNELS]; // Values 0 or 1 typically.
 
 	// Latest packet received (for debugging)
-	char packet_size;
-	const char* packet_bytes;
+	uint8_t packet_size;
+	const uint8_t* packet_bytes;
 };

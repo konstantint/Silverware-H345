@@ -15,12 +15,14 @@
 #include "../../MCUs/PAN159CY/sysclock.h"
 #include "../../Peripherals/mpu6050.h"
 #include "../../Peripherals/xn297.h"
+#include "../../../Common/errors.h"
 #include "../../../Common/point3d.h"
 #include "../../../Control/pid.h"
 #include "../../../RX/bayang.h"
+#include "../../../RX/xn297_ble_beacon.h"
 
 
-class JjrcH345 {
+class JjrcH345Base {
 public:
 	// Chip hardware
 	SysClock<FREQ_50MHZ> clock;
@@ -31,8 +33,8 @@ public:
 	Rfspi rfspi;
 
 	// Peripherals
-	Mpu6050<I2c, decltype(clock)> mpu6050;	// Accelerometer/Gyro
-	Xn297<Rfspi> xn297;		// Radio chip
+	Mpu6050<I2c, decltype(clock)> imu;	// Accelerometer/Gyro
+	Xn297<Xn297Type::Xn297L, Rfspi> xn297;		// Radio chip
 
 	// LED
 	OutputPin<2, 6> led;
@@ -40,8 +42,39 @@ public:
 	// Motors
 	Motors motors;
 
+	inline JjrcH345Base() :
+			clock(), serial(), adc(), battery(adc), i2c(400000), rfspi(2000000), imu(
+					i2c, clock, 0x68), xn297(rfspi), led(
+					false), motors() {
+	}
+
+	// Control interface
+
+	// Gyro output vector is in deg/s, where
+	// x, y, z = roll, pitch, yaw, matching the stick directions
+	inline Point3d<float> read_gyro() {
+		imu.read_gyro();
+		return imu.data().gyro_dps() * (-1); // Flip roll/pitch/yaw axes to match
+	}
+
+	inline void set_motors(const QuadcopterMotorPowers& motor_powers) {
+		for (auto i : ALL_MOTORS)
+			motors.set_power(i, motor_powers[i]);
+	}
+
+	// Run self-diagnostic test(s)
+	inline ErrorCode self_test() {
+		// TODO: recover lost self test logic (call device self tests)
+		return ErrorCode::E_SUCCESS;
+	}
+};
+
+
+class JjrcH345: public JjrcH345Base {
+public:
 	// RX Protocol
 	BayangRX<decltype(xn297), decltype(clock)> rx;
+	BLE<decltype(xn297)> ble;
 
 	// Default Acro PID config
 	// NB: PIDs from Silverware's E011 config actually work out reasonably,
@@ -52,29 +85,13 @@ public:
 		{0.0030, 0.000, 0.00003, 0.001, 5000, 8},
 		{0.0030, 0.000, 0.00003, 0.001, 5000, 8}
 	};
+	constexpr static char name[4] = {'H','3','4','5'};
 
-	inline JjrcH345() :
-			clock(), serial(), adc(), battery(adc), i2c(400000), rfspi(2000000), mpu6050(
-					i2c, clock, 0x68), xn297(rfspi), rx(xn297, clock), led(
-					false), motors() {
-	}
-
-	// Control interface
-
-	// Gyro output vector is in deg/s, where
-	// x, y, z = roll, pitch, yaw, matching the stick directions
-	inline Point3d<float> read_gyro() {
-		mpu6050.read_gyro();
-		return mpu6050.data().gyro_dps() * (-1); // Flip roll/pitch/yaw axes to match
-	}
-
-	inline void set_motors(const QuadcopterMotorPowers& motor_powers) {
-		for (auto i : ALL_MOTORS)
-			motors.set_power(i, motor_powers[i]);
-	}
-
+	inline JjrcH345():
+		JjrcH345Base(), rx(xn297, clock), ble(xn297) {}
 };
 
 // Needed until C++17.
 // https://en.cppreference.com/w/cpp/language/static
 constexpr QuadcopterPidConfigs JjrcH345::acro_pids;
+constexpr char JjrcH345::name[4];

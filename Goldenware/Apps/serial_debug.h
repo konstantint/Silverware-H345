@@ -10,21 +10,23 @@
 #include "../Common/gyro.h"
 #include "../Common/loop.h"
 #include "../Common/printf.h"
+#include "../RX/xn297_ble_beacon.h"
 #include "../Sound/music.h"
+
 
 template<typename QuadcopterBoard, typename Controller>
 struct SerialDebugApp {
 	QuadcopterBoard& board;
 	Controller& controller;
 
+//	BleBeacon<decltype(board.xn297)> beacon;
+
 	float pwr = 0.0;
 	int motor = 0;
 	int adch = 7;
 
 	inline SerialDebugApp(QuadcopterBoard& board_, Controller& controller_) :
-			board(board_), controller(controller_) {
-
-	}
+			board(board_), controller(controller_) {}
 
 	inline int main() {
 		// Welcome blink
@@ -40,58 +42,25 @@ struct SerialDebugApp {
 			printf("%c\n", ch);
 
 			switch (ch) {
-			case 'a':
-				a();
-				break;
-			case 'b':
-				b();
-				break;
-			case 'c':
-				c();
-				break;
-			case 'd':
-				d();
-				break;
-			case 'f':
-				f();
-				break;
-			case 'g':
-				g();
-				break;
-			case 'h':
-				h();
-				break;
-			case 'l':
-				l();
-				break;
-			case 'm':
-				m();
-				break;
-			case 'n':
-				n();
-				break;
-			case 'p':
-				p();
-				break;
-			case 'q':
-				return 0;
-			case 'r':
-				r();
-				break;
-			case 's':
-				s();
-				break;
-			case 't':
-				t();
-				break;
-			case 'x':
-				x();
-				break;
-			case 'y':
-				y();
-				break;
-			default:
-				unknown();
+				case 'a': a(); break;
+				case 'b': b(); break;
+				case 'c': c(); break;
+				case 'd': d(); break;
+				case 'f': f(); break;
+				case 'g': g(); break;
+				case 'h': h(); break;
+				case 'l': l(); break;
+				case 'm': m(); break;
+				case 'n': n(); break;
+				case 'p': p(); break;
+				case 'q': return 0;
+				case 'r': r(); break;
+				case 's': s(); break;
+				case 't': t(); break;
+				case 'x': x(); break;
+				case 'y': y(); break;
+				case 'z': z(); break;
+				default: unknown();
 			};
 		}
 		return 0;
@@ -119,28 +88,29 @@ struct SerialDebugApp {
 				" r: Receive packet\n"
 				" s: Start the soundbox app\n"
 				" x: Display PID parameters\n"
-				" y: Set current motor to current power\n");
+				" y: Set current motor to current power\n"
+				" z: Transmit BLE packet\n");
 	}
 
 	void a() {
 		printf("Accelerometer\n");
-		bool res = board.mpu6050.read_all();
+		bool res = board.imu.read_all();
 		printf("Result: %i\n", res);
 		printf("A:");
-		printf(board.mpu6050.data().acc);
+		printf(board.imu.data().acc);
 		printf("\n");
 		printf("A(g):");
-		printf(board.mpu6050.data().acc_g());
+		printf(board.imu.data().acc_g());
 		printf("\n");
 		printf("G:");
-		printf(board.mpu6050.data().gyro);
+		printf(board.imu.data().gyro);
 		printf("\n");
 		printf("G(dps):");
-		printf(board.mpu6050.data().gyro_dps());
+		printf(board.imu.data().gyro_dps());
 		printf("\n");
 #ifdef MPU6050_USE_TEMPERATURE_SENSOR
-		printf("T: %i\n", board.sixaxis.data().temp);
-		printf("T(C):"); printf(board.sixaxis.data().temp_c()); printf("\n");
+		printf("T: %i\n", board.imu.data().temp);
+		printf("T(C):"); printf(board.imu.data().temp_c()); printf("\n");
 #endif
 	}
 
@@ -226,6 +196,15 @@ struct SerialDebugApp {
 
 	void y() {
 		board.motors.set_power((QuadcopterMotorId) motor, pwr);
+	}
+
+
+	void z() {
+		printf("Transmitting BLE telemetry beacon\n");
+		static int adv_cnt = 0;
+		constexpr MacAddress mac_addr = {0x11, 0x22, 0x33, 0x44, 0x55, 0xF6};
+		BleAdvertisingPacket packet(mac_addr);
+		packet.eddystone_tlm(board.clock.micros(), QuadcopterBoard::name, board.battery.get_voltage(), ++adv_cnt);
 	}
 };
 
